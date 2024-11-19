@@ -4,6 +4,9 @@ let width;
 let height;
 let nodes = [];
 let links = [];
+let highlightedPath = null;
+let highlightedLinks = null;
+let linkLabels = null;
 
 // 初始化D3力导向图
 function initGraph() {
@@ -39,14 +42,28 @@ function updateGraph(data) {
         .attr('d', 'M0,-5L10,0L0,5')
         .attr('fill', '#999');
 
-    // 创建边
-    const link = svg.append('g')
-        .selectAll('line')
+    // 创建边组
+    const linkGroup = svg.append('g')
+        .selectAll('.link-group')
         .data(data.links)
-        .enter().append('line')
+        .enter()
+        .append('g')
+        .attr('class', 'link-group');
+
+    // 创建边线
+    const link = linkGroup.append('line')
         .attr('class', 'link')
         .attr('marker-end', 'url(#arrowhead)')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
         .attr('stroke-width', d => Math.sqrt(d.weight));
+
+    // 添加边权值标签
+    const linkLabel = linkGroup.append('text')
+        .attr('class', 'link-label')
+        .attr('text-anchor', 'middle')
+        .attr('dy', -5)
+        .text(d => d.weight);
 
     // 创建节点组
     const node = svg.append('g')
@@ -73,21 +90,37 @@ function updateGraph(data) {
     // 更新模拟器
     simulation
         .nodes(data.nodes)
-        .on('tick', ticked);
+        .on('tick', () => {
+            // 更新边线位置
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            // 更新边权值标签位置
+            linkLabel
+                .attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2);
+
+            // 更新节点位置
+            node
+                .attr('transform', d => `translate(${d.x},${d.y})`);
+        });
 
     simulation.force('link')
         .links(data.links);
 
-    // 定义tick行为
-    function ticked() {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
+    simulation.alpha(1).restart();
 
-        node
-            .attr('transform', d => `translate(${d.x},${d.y})`);
+    // 保存引用以供后续使用
+    nodes = node;
+    links = link;
+    linkLabels = linkLabel;
+
+    // 如果有高亮路径，重新应用高亮
+    if (highlightedPath) {
+        highlightPath(highlightedPath);
     }
 }
 
@@ -113,19 +146,31 @@ function dragended(event) {
 async function loadGraph() {
     try {
         const response = await fetch('/api/graph');
-        const data = await response.json();
+        const graphData = await response.json();
         
         // 转换数据格式以适应D3
-        const nodes = data.nodes;
-        const links = data.edges.map(edge => ({
-            source: edge.from,
-            target: edge.to,
-            weight: edge.properties.weight || 1
+        const nodes = graphData.nodes.map(node => ({
+            id: node.id,
+            properties: node.properties
         }));
-
-        updateGraph({ nodes, links });
+        
+        const links = [];
+        graphData.nodes.forEach(node => {
+            node.neighbors.forEach(neighbor => {
+                links.push({
+                    source: node.id,
+                    target: neighbor.id,
+                    weight: neighbor.weight
+                });
+            });
+        });
+        
+        updateGraph({nodes, links});
+        
+        // 重置高亮路径
+        highlightedPath = null;
     } catch (error) {
-        console.error('加载图数据失败:', error);
+        console.error('加载图形失败:', error);
     }
 }
 
@@ -176,16 +221,17 @@ document.getElementById('edgeForm').addEventListener('submit', async (e) => {
 
 document.getElementById('pathForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const fromId = document.getElementById('pathFrom').value;
-    const toId = document.getElementById('pathTo').value;
+    const fromId = parseInt(document.getElementById('pathFrom').value);
+    const toId = parseInt(document.getElementById('pathTo').value);
 
     try {
         const response = await fetch(`/api/shortest_path/${fromId}/${toId}`);
-        const path = await response.json();
-        // 高亮显示最短路径
-        highlightPath(path.nodes);
+        const data = await response.json();
+        if (data.nodes) {
+            highlightPath(data.nodes);
+        }
     } catch (error) {
-        console.error('查找最短路径失败:', error);
+        console.error('查询最短路径失败:', error);
     }
 });
 
@@ -202,4 +248,71 @@ window.addEventListener('resize', () => {
     svg.attr('width', width).attr('height', height);
     simulation.force('center', d3.forceCenter(width / 2, height / 2));
     simulation.restart();
-}); 
+});
+
+// 高亮显示路径
+function highlightPath(pathNodes) {
+    // 清除之前的高亮
+    if (nodes && links) {
+        nodes.selectAll('circle').attr('fill', '#69b3a2');
+        links
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', d => Math.sqrt(d.weight));
+    }
+
+    // 如果路径为空，直接返回
+    if (!pathNodes || pathNodes.length === 0) return;
+
+    // 高亮节点
+    nodes.selectAll('circle')
+        .attr('fill', d => pathNodes.includes(d.id) ? '#ff4444' : '#69b3a2');
+
+    // 高亮边和边标签
+    links.attr('stroke', d => {
+        const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+        const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+        
+        for (let i = 0; i < pathNodes.length - 1; i++) {
+            if (sourceId === pathNodes[i] && targetId === pathNodes[i + 1]) {
+                return '#ff4444';
+            }
+        }
+        return '#999';
+    })
+    .attr('stroke-opacity', d => {
+        const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+        const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+        
+        for (let i = 0; i < pathNodes.length - 1; i++) {
+            if (sourceId === pathNodes[i] && targetId === pathNodes[i + 1]) {
+                return 1;
+            }
+        }
+        return 0.6;
+    })
+    .attr('stroke-width', d => {
+        const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+        const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+        
+        for (let i = 0; i < pathNodes.length - 1; i++) {
+            if (sourceId === pathNodes[i] && targetId === pathNodes[i + 1]) {
+                return Math.sqrt(d.weight) * 2;
+            }
+        }
+        return Math.sqrt(d.weight);
+    });
+
+    // 高亮边标签
+    linkLabels.attr('class', d => {
+        const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+        const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+        
+        for (let i = 0; i < pathNodes.length - 1; i++) {
+            if (sourceId === pathNodes[i] && targetId === pathNodes[i + 1]) {
+                return 'link-label highlighted';
+            }
+        }
+        return 'link-label';
+    });
+} 

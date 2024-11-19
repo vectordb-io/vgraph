@@ -70,4 +70,25 @@ svg {
 
 .node text {
     font-size: 12px;
+}
+
+.link.highlighted {
+    stroke: #ff4444;
+    stroke-opacity: 1;
+    stroke-width: 3px;
+}
+
+.node circle.highlighted {
+    fill: #ff4444;
+}
+
+.link-label {
+    font-size: 12px;
+    fill: #666;
+    pointer-events: none;
+}
+
+.link-label.highlighted {
+    fill: #ff4444;
+    font-weight: bold;
 } 

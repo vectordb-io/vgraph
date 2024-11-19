@@ -7,6 +7,9 @@ using namespace vgraph;
 using json = nlohmann::json;
 
 int main(int argc, char** argv) {
+  spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%s:%#] %v");
+  spdlog::info("Starting vgraph server...");
+  
   // 创建图数据库实例
   std::unique_ptr<GraphDB> db;
   try {

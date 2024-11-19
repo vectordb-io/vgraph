@@ -62,169 +62,217 @@ GraphDB::GraphDB(const std::string& db_path) {
 GraphDB::~GraphDB() = default;
 
 bool GraphDB::AddNode(NodeId node_id, const std::string& properties) {
-  // 检查节点是否已存在
+  spdlog::info("Adding node: id={}, properties={}", node_id, properties);
+  
   if (NodeExists(node_id)) {
-    spdlog::warn("Node {} already exists", node_id);
+    spdlog::warn("Node already exists: id={}", node_id);
     return false;
   }
-  
-  // 创建新节点
-  Node node;
-  node.id = node_id;
-  node.properties = properties;
-  
-  // 序列化并存储节点
-  std::string node_key = MakeNodeKey(node_id);
-  std::string node_value = SerializeNode(node);
-  
-  leveldb::Status status = db_->Put(leveldb::WriteOptions(), node_key, node_value);
-  
-  if (!status.ok()) {
-    spdlog::error("Failed to add node {}: {}", node_id, status.ToString());
+
+  try {
+    // 创建新节点
+    Node node;
+    node.id = node_id;
+    node.properties = properties;
+    
+    // 序列化并存储节点
+    std::string node_key = MakeNodeKey(node_id);
+    std::string node_value = SerializeNode(node);
+    
+    leveldb::Status status = db_->Put(leveldb::WriteOptions(), node_key, node_value);
+    
+    if (!status.ok()) {
+      spdlog::error("Failed to add node {}: {}", node_id, status.ToString());
+      return false;
+    }
+    
+    spdlog::info("Successfully added node: id={}", node_id);
+    return true;
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to add node: id={}, error={}", node_id, e.what());
     return false;
   }
-  
-  return true;
 }
 
 bool GraphDB::AddEdge(NodeId from_id, NodeId to_id, Weight weight,
                      const std::string& properties) {
-  // 检查两个节点是否都存在
+  spdlog::info("Adding edge: from={}, to={}, weight={}, properties={}", 
+               from_id, to_id, weight, properties);
+
   if (!NodeExists(from_id) || !NodeExists(to_id)) {
-    spdlog::warn("Node {} or {} does not exist", from_id, to_id);
+    spdlog::warn("Source or target node does not exist: from={}, to={}", 
+                 from_id, to_id);
     return false;
   }
-  
-  // 获取起始节点
-  std::string from_key = MakeNodeKey(from_id);
-  std::string value;
-  leveldb::Status status = db_->Get(leveldb::ReadOptions(), from_key, &value);
-  
-  if (!status.ok()) {
-    spdlog::error("Failed to get node {}: {}", from_id, status.ToString());
+
+  try {
+    // 获取起始节点
+    std::string from_key = MakeNodeKey(from_id);
+    std::string value;
+    leveldb::Status status = db_->Get(leveldb::ReadOptions(), from_key, &value);
+    
+    if (!status.ok()) {
+      spdlog::error("Failed to get node {}: {}", from_id, status.ToString());
+      return false;
+    }
+    
+    Node from_node = DeserializeNode(value);
+    
+    // 更新邻接表
+    from_node.neighbors[to_id] = weight;
+    
+    // 保存更新后的节点
+    std::string new_value = SerializeNode(from_node);
+    status = db_->Put(leveldb::WriteOptions(), from_key, new_value);
+    
+    if (!status.ok()) {
+      spdlog::error("Failed to update node {}: {}", from_id, status.ToString());
+      return false;
+    }
+    
+    // 存储边的属性
+    std::string edge_key = MakeEdgeKey(from_id, to_id);
+    status = db_->Put(leveldb::WriteOptions(), edge_key, properties);
+    
+    if (!status.ok()) {
+      spdlog::error("Failed to store edge properties: {}", status.ToString());
+      return false;
+    }
+    
+    spdlog::info("Successfully added edge: from={}, to={}", from_id, to_id);
+    return true;
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to add edge: from={}, to={}, error={}", 
+                  from_id, to_id, e.what());
     return false;
   }
-  
-  Node from_node = DeserializeNode(value);
-  
-  // 更新邻接表
-  from_node.neighbors[to_id] = weight;
-  
-  // 保存更新后的节点
-  std::string new_value = SerializeNode(from_node);
-  status = db_->Put(leveldb::WriteOptions(), from_key, new_value);
-  
-  if (!status.ok()) {
-    spdlog::error("Failed to update node {}: {}", from_id, status.ToString());
-    return false;
-  }
-  
-  // 存储边的属性
-  std::string edge_key = MakeEdgeKey(from_id, to_id);
-  status = db_->Put(leveldb::WriteOptions(), edge_key, properties);
-  
-  if (!status.ok()) {
-    spdlog::error("Failed to store edge properties: {}", status.ToString());
-    return false;
-  }
-  
-  return true;
 }
 
 bool GraphDB::ShortestPath(NodeId from_id, NodeId to_id, Path* path) {
+  spdlog::info("Finding shortest path: from={}, to={}", from_id, to_id);
+
   if (!NodeExists(from_id) || !NodeExists(to_id)) {
+    spdlog::warn("Source or target node does not exist: from={}, to={}", 
+                 from_id, to_id);
     return false;
   }
-  
-  // 使用Dijkstra算法查找最短路径
-  std::unordered_map<NodeId, Weight> distances;
-  std::unordered_map<NodeId, NodeId> previous;
-  std::priority_queue<std::pair<Weight, NodeId>,
-                     std::vector<std::pair<Weight, NodeId>>,
-                     std::greater<>> pq;
-  
-  // 初始化距离
-  distances[from_id] = 0;
-  pq.push({0, from_id});
-  
-  while (!pq.empty()) {
-    auto [dist, current] = pq.top();
-    pq.pop();
+
+  try {
+    // 使用Dijkstra算法查找最短路径
+    std::unordered_map<NodeId, Weight> distances;
+    std::unordered_map<NodeId, NodeId> previous;
+    std::priority_queue<std::pair<Weight, NodeId>,
+                       std::vector<std::pair<Weight, NodeId>>,
+                       std::greater<>> pq;
     
-    if (current == to_id) {
-      break;
-    }
+    // 初始化距离
+    distances[from_id] = 0;
+    pq.push({0, from_id});
     
-    if (dist > distances[current]) {
-      continue;
-    }
-    
-    // 遍历邻居
-    auto neighbors = GetDirectNeighbors(current);
-    for (const auto& [neighbor, weight] : neighbors) {
-      Weight new_dist = dist + weight;
+    while (!pq.empty()) {
+      auto [dist, current] = pq.top();
+      pq.pop();
       
-      if (distances.find(neighbor) == distances.end() ||
-          new_dist < distances[neighbor]) {
-        distances[neighbor] = new_dist;
-        previous[neighbor] = current;
-        pq.push({new_dist, neighbor});
+      if (current == to_id) {
+        break;
+      }
+      
+      if (dist > distances[current]) {
+        continue;
+      }
+      
+      // 遍历邻居
+      auto neighbors = GetDirectNeighbors(current);
+      for (const auto& [neighbor, weight] : neighbors) {
+        Weight new_dist = dist + weight;
+        
+        if (distances.find(neighbor) == distances.end() ||
+            new_dist < distances[neighbor]) {
+          distances[neighbor] = new_dist;
+          previous[neighbor] = current;
+          pq.push({new_dist, neighbor});
+        }
       }
     }
-  }
-  
-  // 如果没有找到路径
-  if (previous.find(to_id) == previous.end()) {
+    
+    // 如果没有找到路径
+    if (previous.find(to_id) == previous.end()) {
+      spdlog::warn("No path found: from={}, to={}", from_id, to_id);
+      return false;
+    }
+    
+    // 构造路径
+    path->nodes.clear();
+    path->total_weight = distances[to_id];
+    
+    for (NodeId current = to_id; current != from_id;
+         current = previous[current]) {
+      path->nodes.push_back(current);
+    }
+    path->nodes.push_back(from_id);
+    
+    // 反转路径使其从起点开始
+    std::reverse(path->nodes.begin(), path->nodes.end());
+    
+    spdlog::info("Found path: from={}, to={}, length={}, total_weight={}, path={}", 
+                 from_id, to_id, path->nodes.size(), path->total_weight, path->ToJson().dump());
+    return true;
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to find path: from={}, to={}, error={}", 
+                  from_id, to_id, e.what());
     return false;
   }
-  
-  // 构造路径
-  path->nodes.clear();
-  path->total_weight = distances[to_id];
-  
-  for (NodeId current = to_id; current != from_id;
-       current = previous[current]) {
-    path->nodes.push_back(current);
-  }
-  path->nodes.push_back(from_id);
-  
-  // 反转路径使其从起点开始
-  std::reverse(path->nodes.begin(), path->nodes.end());
-  
-  return true;
 }
 
 std::vector<GraphDB::NodeId> GraphDB::GetNeighborsWithinNDegrees(
     NodeId node_id, int n) {
-  if (!NodeExists(node_id) || n < 0) {
+  spdlog::info("Getting neighbors within {} degrees: node={}", n, node_id);
+
+  // 检查节点是否存在
+  if (!NodeExists(node_id)) {
+    spdlog::warn("Node does not exist: id={}", node_id);
     return {};
   }
-  
-  std::unordered_set<NodeId> result;
-  std::queue<std::pair<NodeId, int>> q;
-  
-  // 从起始节点开始BFS
-  q.push({node_id, 0});
-  result.insert(node_id);
-  
-  while (!q.empty()) {
-    auto [current, degree] = q.front();
-    q.pop();
+
+  // 处理无效的度数
+  if (n < 0) {
+    spdlog::warn("Invalid degree value: {}", n);
+    return {};
+  }
+
+  try {
+    std::unordered_set<NodeId> result;
+    std::queue<std::pair<NodeId, int>> q;
     
-    if (degree >= n) {
-      continue;
-    }
+    // 从起始节点开始BFS
+    q.push({node_id, 0});
+    result.insert(node_id);
     
-    // 获取当前节点的直接邻居
-    auto neighbors = GetDirectNeighbors(current);
-    for (const auto& [neighbor, _] : neighbors) {
-      if (result.insert(neighbor).second) {
-        q.push({neighbor, degree + 1});
+    while (!q.empty()) {
+      auto [current, degree] = q.front();
+      q.pop();
+      
+      if (degree >= n) {
+        continue;
+      }
+      
+      // 获取当前节点的直接邻居
+      auto neighbors = GetDirectNeighbors(current);
+      for (const auto& [neighbor, _] : neighbors) {
+        if (result.insert(neighbor).second) {
+          q.push({neighbor, degree + 1});
+        }
       }
     }
+    
+    spdlog::info("Found {} neighbors within {} degrees for node {}", 
+                 result.size(), n, node_id);
+    return std::vector<NodeId>(result.begin(), result.end());
+  } catch (const std::exception& e) {
+    spdlog::error("Failed to get neighbors: node={}, degrees={}, error={}", 
+                  node_id, n, e.what());
+    return {};
   }
-  
-  return std::vector<NodeId>(result.begin(), result.end());
 }
 
 bool GraphDB::NodeExists(NodeId node_id) const {

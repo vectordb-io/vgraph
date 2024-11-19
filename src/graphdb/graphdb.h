@@ -9,6 +9,7 @@
 #include <queue>
 #include "slice.h"
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 namespace vgraph {
 
 /**
@@ -33,6 +34,10 @@ class GraphDB {
   struct Path {
     std::vector<NodeId> nodes;  // 路径上的节点
     Weight total_weight;        // 路径总权重
+
+    nlohmann::json ToJson() const {
+      return nlohmann::json{{"nodes", nodes}, {"total_weight", total_weight}};
+    }
   };
 
   /**
