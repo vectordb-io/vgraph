@@ -11,6 +11,7 @@
 ```
 .
 ├── description.md
+├── LICENSE
 ├── Makefile
 ├── README_CN.md
 ├── README.md
@@ -25,7 +26,8 @@
 │   │   └── vgraph_server.cc
 │   ├── test
 │   │   ├── coding_demo_test.cc
-│   │   └── coding_test.cc
+│   │   ├── coding_test.cc
+│   │   └── graphdb_test.cc
 │   └── util
 │       ├── coding.cc
 │       ├── coding_demo.cc
@@ -64,6 +66,7 @@
 - `coding_demo.h`: 编码函数如何使用的样例代码的声明
 - `coding_demo_test.cc`: 关于coding_demo.h中相关类与函数的测试用例
 - `coding_test.cc`: 关于coding.h中相关类与函数的测试用例
+- `graphdb_test.cc`: 关于graphdb.h中相关类与函数的测试用例
 - `Makefile`: 构建自动化脚本
 - `README.md`: 项目文档和使用说明（英文）
 - `README_CN.md`: 项目文档和使用说明（中文）
