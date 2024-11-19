@@ -33,13 +33,14 @@
 │       ├── coding_demo.cc
 │       ├── coding_demo.h
 │       └── coding.h
-└── third_party
-    ├── cpp-httplib
-    ├── cxxopts
-    ├── googletest
-    ├── leveldb
-    ├── nlohmann_json
-    └── spdlog
+├── third_party
+│   ├── cpp-httplib
+│   ├── cxxopts
+│   ├── googletest
+│   ├── leveldb
+│   ├── nlohmann_json
+│   └── spdlog
+└── web
 ```
 
 ## Directory Description
@@ -53,6 +54,7 @@
 - `output/obj`: 编译生成的中间文件目录
 - `output/main`: 编译生成的可执行程序目录
 - `third_party`: 第三方库目录
+- `web`: 用户交互页面目录
 
 ## File Description
 - `common.h`: 公共头文件
@@ -70,6 +72,119 @@
 - `Makefile`: 构建自动化脚本
 - `README.md`: 项目文档和使用说明（英文）
 - `README_CN.md`: 项目文档和使用说明（中文）
+
+
+## 用户交互页面功能
+- 使用html,css,javascript,python3,flask实现
+- 启动方式 `python app.py`，在`127.0.0.1:5000`端口提供http服务
+- 用户使用浏览器访问`127.0.0.1:5000`，通过点击页面上的按钮来操作
+- 功能包括：
+    - 添加节点
+    - 添加边
+    - 查找最短路径
+    - 可视化的方式展示图数据库中的节点与边
+- app.py调用c++程序vgraph_server提供的http接口(http://127.0.0.1:8080)，实现对图数据库的增删改查。命令格式参考“使用curl命令测试”章节
+
+
+## 使用curl命令测试
+
+### 添加节点 (1-20)
+```bash
+# 添加节点1-5 (城市)
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 1, "properties": {"name": "北京"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 2, "properties": {"name": "上海"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 3, "properties": {"name": "广州"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 4, "properties": {"name": "深圳"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 5, "properties": {"name": "杭州"}}'
+
+# 添加节点6-10 (景点)
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 6, "properties": {"name": "故宫"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 7, "properties": {"name": "外滩"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 8, "properties": {"name": "西湖"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 9, "properties": {"name": "珠峰塔"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 10, "properties": {"name": "世界之窗"}}'
+
+# 添加节点11-15 (餐厅)
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 11, "properties": {"name": "全聚德"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 12, "properties": {"name": "南翔小笼"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 13, "properties": {"name": "陶然居"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 14, "properties": {"name": "绿茶餐厅"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 15, "properties": {"name": "顺记冰室"}}'
+
+# 添加节点16-20 (酒店)
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 16, "properties": {"name": "北京饭店"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 17, "properties": {"name": "和平饭店"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 18, "properties": {"name": "白天鹅宾馆"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 19, "properties": {"name": "深圳华侨城"}}'
+curl -X POST http://127.0.0.1:8080/node -H "Content-Type: application/json" -d '{"id": 20, "properties": {"name": "西子湖四季"}}'
+```
+
+### 添加边 (城市之间的交通连接)
+```bash
+# 城市之间的高铁连接
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 1, "to": 2, "weight": 4.5, "properties": {"type": "高铁"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 2, "to": 5, "weight": 2.5, "properties": {"type": "高铁"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 2, "to": 3, "weight": 8.0, "properties": {"type": "高铁"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 3, "to": 4, "weight": 1.0, "properties": {"type": "高铁"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 5, "to": 3, "weight": 6.0, "properties": {"type": "高铁"}}'
+```
+
+### 添加边 (城市与景点的连接)
+```bash
+# 城市与景点的连接
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 1, "to": 6, "weight": 1.0, "properties": {"type": "景点"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 2, "to": 7, "weight": 1.0, "properties": {"type": "景点"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 5, "to": 8, "weight": 1.0, "properties": {"type": "景点"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 3, "to": 9, "weight": 1.0, "properties": {"type": "景点"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 4, "to": 10, "weight": 1.0, "properties": {"type": "景点"}}'
+```
+
+### 添加边 (城市与餐厅的连接)
+```bash
+# 城市与餐厅的连接
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 1, "to": 11, "weight": 1.0, "properties": {"type": "餐厅"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 2, "to": 12, "weight": 1.0, "properties": {"type": "餐厅"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 3, "to": 13, "weight": 1.0, "properties": {"type": "餐厅"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 5, "to": 14, "weight": 1.0, "properties": {"type": "餐厅"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 4, "to": 15, "weight": 1.0, "properties": {"type": "餐厅"}}'
+```
+
+### 添加边 (城市与酒店的连接)
+```bash
+# 城市与酒店的连接
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 1, "to": 16, "weight": 1.0, "properties": {"type": "酒店"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 2, "to": 17, "weight": 1.0, "properties": {"type": "酒店"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 3, "to": 18, "weight": 1.0, "properties": {"type": "酒店"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 4, "to": 19, "weight": 1.0, "properties": {"type": "酒店"}}'
+curl -X POST http://127.0.0.1:8080/edge -H "Content-Type: application/json" -d '{"from": 5, "to": 20, "weight": 1.0, "properties": {"type": "酒店"}}'
+```
+
+### 测试最短路径查询
+```bash
+# 查询从北京到深圳的最短路径
+curl http://127.0.0.1:8080/shortest_path/1/4
+
+# 查询从杭州到广州的最短路径
+curl http://127.0.0.1:8080/shortest_path/5/3
+```
+
+### 查看整个图的数据
+```bash
+# 获取完整的图数据
+curl http://127.0.0.1:8080/graph
+```
+
+这些命令创建了一个包含:
+- 5个城市节点 (1-5)
+- 5个景点节点 (6-10)
+- 5个餐厅节点 (11-15)
+- 5个酒店节点 (16-20)
+- 城市之间的高铁连接
+- 城市与景点的连接
+- 城市与餐厅的连接
+- 城市与酒店的连接
+
+形成了一个模拟的旅游信息图数据库。
 
 ## Coding Guidelines
 - Follow the Google C++ Style Guide (https://google.github.io/styleguide/cppguide.html), which has already been added into cursor's Docs(@google_cppstyle).
